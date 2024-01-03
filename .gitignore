@@ -1,4 +1,3 @@
-scripts/main.sh.coll
-scripts/main.sh.prod
+scripts/main.sh.*
 *log
 *tmp

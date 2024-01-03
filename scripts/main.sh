@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Inspired by: https://www.redhat.com/en/blog/pushing-application-images-to-an-external-registry
+
 set -xeuo pipefail
 
 readonly NEXUS_HOST="alm-repos.sogei.it"
@@ -50,9 +52,10 @@ oc get -o json   image.config.openshift.io/cluster                              
   egrep -q true
 [ $? -ne 0 ] && echo "Il Nexus registry ${NEXUS_HOST}:${NEXUS_PORT} non è esplicitamente abilitato in questo OCP" && exit 1
 
+set +e
 oc get project -o name | egrep ${OCP4_PROJ} 2>&1 >/dev/null
 [ $? -eq 0 ] && echo "Il proj ${OCP4_PROJ} esiste già" && exit 1 
-
+set -e
 
 
 ### MAIN ###
@@ -61,6 +64,7 @@ oc new-project ${OCP4_PROJ}
 
 oc -n ${OCP4_PROJ} new-app --template=cakephp-mysql-persistent
 
+# https://docs.openshift.com/container-platform/4.11/openshift_images/image-streams-manage.html#images-allow-pods-to-reference-images-from-secure-registries_image-streams-managing
 oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
   --docker-server=${NEXUS_HOST}:${NEXUS_PORT} \
   --docker-username=${NEXUS_USERNAME} \
@@ -72,10 +76,16 @@ oc -n ${OCP4_PROJ} secrets link builder  ${NEXUS_HOST}
 
 oc -n ${OCP4_PROJ} secrets link deployer ${NEXUS_HOST} --for=pull
 
-#oc -n ${OCP4_PROJ} import-image nexus-cakephp-mysql-persistent \
-#    --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent  
+oc  patch bc cakephp-mysql-persistent -p "'{"spec":{"output":{"to":{"kind":"DockerImage","name":"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent:latest"}}}}'"
 
-#oc -n ${OCP4_PROJ} patch  \
+oc start-build -F cakephp-mysql-persistent
+
+oc -n ${OCP4_PROJ} import-image nexus-cakephp-mysql-persistent \
+    --scheduled=true --confirm                                 \
+    --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent:latest  
+#oc import-image nexus --scheduled=true --confirm --from=alm-repos.sogei.it:8091/ocp/coll/martinellis-cakephp/cakephp-mysql-persistent:latest
+
+#oc -n ${OCP4_PROJ} patch 
 
 #oc -n ${OCP4_PROJ}  rollout latest cakephp-mysql-persistent
 
