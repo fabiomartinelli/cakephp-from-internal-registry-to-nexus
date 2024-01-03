@@ -8,11 +8,11 @@ readonly NEXUS_USERNAME="webo"
 readonly OCP4_TEMPLATE="cakephp-mysql-persistent"
 
 # Initial checks ##############
-oc whoami 2>& /dev/null
+oc whoami >/dev/null 2>&1
+[ $? -ne 0 ] && exit 1  
+which jq  >/dev/null 2>&1
 [ $? -ne 0 ] && exit 1
-which jq  2>& /dev/null
-[ $? -ne 0 ] && exit 1
-oc get -n openshift template/${OCP4_TEMPLATE} -o name 2>& /dev/null
+oc get -n openshift template/${OCP4_TEMPLATE} -o name > /dev/null 2>&1
 ################################
 
 
@@ -42,20 +42,38 @@ done
 [ -z ${OCP4_PROJ}      ]  && exit 1
 [ -z ${OCP4_ENV}       ]  && exit 1
 
-# OCP4 deve consentire uso del Docker Registry ${OCP4_PROJ}:${OCP4_ENV}
-oc get -o json  image.config.openshift.io/cluster | jq  "' .spec.registrySources.allowedRegistries[] | contains(\"${OCP4_PROJ}:${OCP4_ENV}\")'" | egrep -q true
-[ $? -ne 0 ] && exit 1
+
+# OCP4 deve consentire uso del Docker Registry ${NEXUS_HOST}:${NEXUS_PORT}
+# oc get -o json image.config.openshift.io/cluster | jq  ' .spec.registrySources.allowedRegistries[] | contains("alm-repos.sogei.it:8091")' | egrep -q true
+oc get -o json   image.config.openshift.io/cluster                                                   | \
+  jq  ' .spec.registrySources.allowedRegistries[] | contains(($ENV.NEXUS_HOST+":"+$ENV.NEXUS_PORT))' | \
+  egrep -q true
+[ $? -ne 0 ] && echo "Il Nexus registry ${NEXUS_HOST}:${NEXUS_PORT} non è esplicitamente abilitato in questo OCP" && exit 1
+
+oc get project -o name | egrep ${OCP4_PROJ} 2>&1 >/dev/null
+[ $? -eq 0 ] && echo "Il proj ${OCP4_PROJ} esiste già" && exit 1 
+
+
+
+### MAIN ###
+
+oc new-project ${OCP4_PROJ}
+
+oc -n ${OCP4_PROJ} new-app --template=cakephp-mysql-persistent
 
 oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
   --docker-server=${NEXUS_HOST}:${NEXUS_PORT} \
   --docker-username=${NEXUS_USERNAME} \
   --docker-password=${NEXUS_PASSWORD}
 
+oc -n ${OCP4_PROJ} logs bc/cakephp-mysql-persistent -f
+
 oc -n ${OCP4_PROJ} secrets link builder  ${NEXUS_HOST}
+
 oc -n ${OCP4_PROJ} secrets link deployer ${NEXUS_HOST} --for=pull
 
 #oc -n ${OCP4_PROJ} import-image nexus-cakephp-mysql-persistent \
-    --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent  
+#    --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent  
 
 #oc -n ${OCP4_PROJ} patch  \
 
