@@ -8,6 +8,7 @@ readonly NEXUS_HOST="alm-repos.sogei.it"
 readonly NEXUS_PORT="8091"
 readonly NEXUS_USERNAME="webo"
 readonly OCP4_TEMPLATE="cakephp-mysql-persistent"
+readonly NEXUS_IS="nexus-${OCP4_TEMPLATE}"
 
 # Initial checks ##############
 oc whoami >/dev/null 2>&1
@@ -62,7 +63,7 @@ set -e
 
 oc new-project ${OCP4_PROJ}
 
-oc -n ${OCP4_PROJ} new-app --template=cakephp-mysql-persistent
+oc -n ${OCP4_PROJ} new-app --template=${OCP4_TEMPLATE}
 
 # https://docs.openshift.com/container-platform/4.11/openshift_images/image-streams-manage.html#images-allow-pods-to-reference-images-from-secure-registries_image-streams-managing
 oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
@@ -70,25 +71,35 @@ oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
   --docker-username=${NEXUS_USERNAME} \
   --docker-password=${NEXUS_PASSWORD}
 
-oc -n ${OCP4_PROJ} logs bc/cakephp-mysql-persistent -f
+oc -n ${OCP4_PROJ} logs bc/${OCP4_TEMPLATE} -f
 
 oc -n ${OCP4_PROJ} secrets link builder  ${NEXUS_HOST}
 
 oc -n ${OCP4_PROJ} secrets link deployer ${NEXUS_HOST} --for=pull
 
-oc  patch bc cakephp-mysql-persistent -p "'{"spec":{"output":{"to":{"kind":"DockerImage","name":"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent:latest"}}}}'"
+# oc patch quota "my-object" -p "{\"spec\":{\"hard\":{\"$OS_OBJECT\":\"$VALUE\"}}}"
+oc  patch bc cakephp-mysql-persistent -p "{\"spec\":{\"output\":{\"to\":{\"kind\":\"DockerImage\",\"name\":\"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest\"}}}}"
 
-oc start-build -F cakephp-mysql-persistent
+oc start-build -F ${OCP4_TEMPLATE}
 
-oc -n ${OCP4_PROJ} import-image nexus-cakephp-mysql-persistent \
+oc -n ${OCP4_PROJ} import-image ${NEXUS_IS} \
     --scheduled=true --confirm                                 \
-    --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/cakephp-mysql-persistent:latest  
+    --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest  
 #oc import-image nexus --scheduled=true --confirm --from=alm-repos.sogei.it:8091/ocp/coll/martinellis-cakephp/cakephp-mysql-persistent:latest
 
-#oc -n ${OCP4_PROJ} patch 
+#oc -n ${OCP4_PROJ} get dc/cakephp-mysql-persistent -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
 
-#oc -n ${OCP4_PROJ}  rollout latest cakephp-mysql-persistent
+# $ oc get dc/cakephp-mysql-persistent -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
+# cakephp-mysql-persistent:latest
 
-#oc -n ${OCP4_PROJ}  logs -f deploymentconfig.apps.openshift.io/cakephp-mysql-persistent
+# https://github.com/kubernetes/kubernetes/issues/63247#issuecomment-419783719
+oc -n ${OCP4_PROJ} patch dc/${OCP4_TEMPLATE} --type json -p "
+- op: replace
+  path: /spec/triggers/0/imageChangeParams/from/name
+  value: ${NEXUS_IS}:latest
+"
+
+oc logs -f dc/cakephp-mysql-persistent
+
 
 
