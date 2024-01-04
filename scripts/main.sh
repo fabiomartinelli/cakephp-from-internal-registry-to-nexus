@@ -4,9 +4,6 @@
 
 set -xeuo pipefail
 
-#readonly NEXUS_HOST="alm-repos.sogei.it"
-#readonly NEXUS_PORT="8091"
-#readonly NEXUS_USERNAME="webo"
 readonly OCP4_TEMPLATE="cakephp-mysql-persistent"
 readonly NEXUS_IS="nexus-${OCP4_TEMPLATE}"
 
@@ -59,7 +56,7 @@ done
 
 
 # OCP4 deve consentire uso del Docker Registry ${NEXUS_HOST}:${NEXUS_PORT}
-# oc get -o json image.config.openshift.io/cluster | jq  ' .spec.registrySources.allowedRegistries[] | contains("alm-repos.sogei.it:8091")' | egrep -q true
+# oc get -o json image.config.openshift.io/cluster | jq  ' .spec.registrySources.allowedRegistries[] | contains("YYY.XXX.it:8091")' | egrep -q true
 oc get -o json   image.config.openshift.io/cluster                                                   | \
   jq  ' .spec.registrySources.allowedRegistries[] | contains(($ENV.NEXUS_HOST+":"+$ENV.NEXUS_PORT))' | \
   egrep -q true
@@ -97,11 +94,11 @@ oc start-build -F ${OCP4_TEMPLATE}
 oc -n ${OCP4_PROJ} import-image ${NEXUS_IS} \
     --scheduled=true --confirm                                 \
     --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest  
-#oc import-image nexus --scheduled=true --confirm --from=alm-repos.sogei.it:8091/ocp/coll/martinellis-cakephp/cakephp-mysql-persistent:latest
+#oc import-image nexus --scheduled=true --confirm --from=YYY.XXX.it:8091/ocp/coll/martinellis-cakephp/cakephp-mysql-persistent:latest
 
-#oc -n ${OCP4_PROJ} get dc/cakephp-mysql-persistent -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
+#oc -n ${OCP4_PROJ} get dc/${OCP4_TEMPLATE} -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
 
-# $ oc get dc/cakephp-mysql-persistent -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
+# $ oc get dc/${OCP4_TEMPLATE} -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
 # cakephp-mysql-persistent:latest
 
 # https://github.com/kubernetes/kubernetes/issues/63247#issuecomment-419783719
