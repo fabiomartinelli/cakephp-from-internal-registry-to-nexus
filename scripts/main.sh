@@ -87,9 +87,9 @@ oc -n ${OCP4_PROJ} secrets link builder  ${NEXUS_HOST}
 oc -n ${OCP4_PROJ} secrets link deployer ${NEXUS_HOST} --for=pull
 
 # oc patch quota "my-object" -p "{\"spec\":{\"hard\":{\"$OS_OBJECT\":\"$VALUE\"}}}"
-oc  patch bc ${OCP4_TEMPLATE} -p "{\"spec\":{\"output\":{\"to\":{\"kind\":\"DockerImage\",\"name\":\"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest\"}}}}"
+oc -n ${OCP4_PROJ} patch bc ${OCP4_TEMPLATE} -p "{\"spec\":{\"output\":{\"to\":{\"kind\":\"DockerImage\",\"name\":\"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest\"}}}}"
 
-oc start-build -F ${OCP4_TEMPLATE}
+oc -n ${OCP4_PROJ} start-build -F ${OCP4_TEMPLATE}
 
 oc -n ${OCP4_PROJ} import-image ${NEXUS_IS} \
     --scheduled=true --confirm                                 \
