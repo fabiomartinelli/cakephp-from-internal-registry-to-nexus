@@ -4,9 +4,9 @@
 
 set -xeuo pipefail
 
-readonly NEXUS_HOST="alm-repos.sogei.it"
-readonly NEXUS_PORT="8091"
-readonly NEXUS_USERNAME="webo"
+#readonly NEXUS_HOST="alm-repos.sogei.it"
+#readonly NEXUS_PORT="8091"
+#readonly NEXUS_USERNAME="webo"
 readonly OCP4_TEMPLATE="cakephp-mysql-persistent"
 readonly NEXUS_IS="nexus-${OCP4_TEMPLATE}"
 
@@ -19,16 +19,25 @@ oc get -n openshift template/${OCP4_TEMPLATE} -o name > /dev/null 2>&1
 ################################
 
 
-while getopts ":p:P:e:" opt; do
+while getopts ":p:e:P:H:U:T:" opt; do
   case $opt in
     p)
-      OCP4_PROJ="$OPTARG"
+      readonly OCP4_PROJ="$OPTARG"
       ;;
     e)
-      OCP4_ENV="$OPTARG"
+      readonly OCP4_ENV="$OPTARG"
       ;;
     P)
-      NEXUS_PASSWORD="$OPTARG"
+      readonly NEXUS_PASSWORD="$OPTARG"
+      ;;
+    H)
+      readonly NEXUS_HOST="$OPTARG"
+      ;;
+    U)
+      readonly NEXUS_USERNAME="$OPTARG"
+      ;;
+    T)
+      readonly NEXUS_PORT="$OPTARG"
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -42,6 +51,9 @@ while getopts ":p:P:e:" opt; do
 done
 
 [ -z ${NEXUS_PASSWORD} ]  && exit 1
+[ -z ${NEXUS_HOST}     ]  && exit 1
+[ -z ${NEXUS_USERNAME} ]  && exit 1
+[ -z ${NEXUS_PORT}     ]  && exit 1
 [ -z ${OCP4_PROJ}      ]  && exit 1
 [ -z ${OCP4_ENV}       ]  && exit 1
 
@@ -78,7 +90,7 @@ oc -n ${OCP4_PROJ} secrets link builder  ${NEXUS_HOST}
 oc -n ${OCP4_PROJ} secrets link deployer ${NEXUS_HOST} --for=pull
 
 # oc patch quota "my-object" -p "{\"spec\":{\"hard\":{\"$OS_OBJECT\":\"$VALUE\"}}}"
-oc  patch bc cakephp-mysql-persistent -p "{\"spec\":{\"output\":{\"to\":{\"kind\":\"DockerImage\",\"name\":\"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest\"}}}}"
+oc  patch bc ${OCP4_TEMPLATE} -p "{\"spec\":{\"output\":{\"to\":{\"kind\":\"DockerImage\",\"name\":\"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest\"}}}}"
 
 oc start-build -F ${OCP4_TEMPLATE}
 
@@ -99,7 +111,8 @@ oc -n ${OCP4_PROJ} patch dc/${OCP4_TEMPLATE} --type json -p "
   value: ${NEXUS_IS}:latest
 "
 
-oc logs -f dc/cakephp-mysql-persistent
+oc -n ${OCP4_PROJ} logs -f dc/${OCP4_TEMPLATE}
 
-
+# Stimoliamo altra catena: POD build --> Image to Nexus --> ImageStream che rileva nuova immagine dopo 15' --> new POD Running 
+oc -n ${OCP4_PROJ} start-build -F ${OCP4_TEMPLATE}
 
