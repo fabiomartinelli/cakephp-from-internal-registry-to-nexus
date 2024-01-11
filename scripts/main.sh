@@ -72,9 +72,6 @@ set -e
 
 oc new-project ${OCP4_PROJ}
 
-# redhat-support-tool kb 7028693
-#oc -n ${OCP4_PROJ} new-app --template=${OCP4_TEMPLATE}
-oc process ${OCP4_TEMPLATE}  -n openshift | oc create -f - -n ${OCP4_PROJ}
 
 # https://docs.openshift.com/container-platform/4.11/openshift_images/image-streams-manage.html#images-allow-pods-to-reference-images-from-secure-registries_image-streams-managing
 oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
@@ -82,11 +79,15 @@ oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
   --docker-username=${NEXUS_USERNAME} \
   --docker-password=${NEXUS_PASSWORD}
 
-oc -n ${OCP4_PROJ} logs bc/${OCP4_TEMPLATE} -f
 
 oc -n ${OCP4_PROJ} secrets link builder  ${NEXUS_HOST}
 
 oc -n ${OCP4_PROJ} secrets link deployer ${NEXUS_HOST} --for=pull
+
+# redhat-support-tool kb 7028693   | Fino a OCP 4.11 era: oc -n ${OCP4_PROJ} new-app --template=${OCP4_TEMPLATE}
+oc process ${OCP4_TEMPLATE}  -n openshift | oc create -f - -n ${OCP4_PROJ}
+
+oc -n ${OCP4_PROJ} logs bc/${OCP4_TEMPLATE} -f
 
 # oc patch quota "my-object" -p "{\"spec\":{\"hard\":{\"$OS_OBJECT\":\"$VALUE\"}}}"
 oc -n ${OCP4_PROJ} patch bc ${OCP4_TEMPLATE} -p "{\"spec\":{\"output\":{\"to\":{\"kind\":\"DockerImage\",\"name\":\"${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest\"}}}}"
@@ -98,6 +99,9 @@ oc -n ${OCP4_PROJ} import-image ${NEXUS_IS} \
     --from=${NEXUS_HOST}:${NEXUS_PORT}/ocp/${OCP4_ENV}/${OCP4_PROJ}/${OCP4_TEMPLATE}:latest  
 #oc import-image nexus --scheduled=true --confirm --from=YYY.XXX.it:8091/ocp/coll/martinellis-cakephp/cakephp-mysql-persistent:latest
 
+oc -n ${OCP4_PROJ} tag ${NEXUS_IS}:latest ${NEXUS_IS}:deploy
+
+
 #oc -n ${OCP4_PROJ} get dc/${OCP4_TEMPLATE} -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
 
 # $ oc get dc/${OCP4_TEMPLATE} -o yaml | yq .spec.triggers[0].imageChangeParams.from.name
@@ -107,11 +111,14 @@ oc -n ${OCP4_PROJ} import-image ${NEXUS_IS} \
 oc -n ${OCP4_PROJ} patch dc/${OCP4_TEMPLATE} --type json -p "
 - op: replace
   path: /spec/triggers/0/imageChangeParams/from/name
-  value: ${NEXUS_IS}:latest
+  value: ${NEXUS_IS}:deploy
 "
 
 oc -n ${OCP4_PROJ} logs -f dc/${OCP4_TEMPLATE}
 
 # Stimoliamo altra catena: POD build --> Image to Nexus --> ImageStream che rileva nuova immagine dopo 15' --> new POD Running 
 oc -n ${OCP4_PROJ} start-build -F ${OCP4_TEMPLATE}
+oc -n ${OCP4_PROJ} tag ${NEXUS_IS}:latest ${NEXUS_IS}:deploy
+oc -n ${OCP4_PROJ} logs -f dc/${OCP4_TEMPLATE}
+
 
