@@ -72,7 +72,9 @@ set -e
 
 oc new-project ${OCP4_PROJ}
 
-oc -n ${OCP4_PROJ} new-app --template=${OCP4_TEMPLATE}
+# redhat-support-tool kb 7028693
+#oc -n ${OCP4_PROJ} new-app --template=${OCP4_TEMPLATE}
+oc process ${OCP4_TEMPLATE}  -n openshift | oc create -f - -n ${OCP4_PROJ}
 
 # https://docs.openshift.com/container-platform/4.11/openshift_images/image-streams-manage.html#images-allow-pods-to-reference-images-from-secure-registries_image-streams-managing
 oc -n ${OCP4_PROJ} create secret docker-registry ${NEXUS_HOST} \
